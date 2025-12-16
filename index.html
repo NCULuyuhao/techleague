@@ -18,16 +18,14 @@
       font-size: 26px;
     }
 
-    /* 主舞台：左右排（不疊在圖上） */
+    /* ===== 上半部：圖表 + 目前花費成本 ===== */
     .stage{
       display: grid;
-      grid-template-columns: 3fr 1.2fr; /* 左大圖、右小表 */
+      grid-template-columns: 3fr 1.2fr;
       gap: 16px;
       padding: 16px;
       background: #fff;
-      border-top: 1px solid #eee;
       border-bottom: 1px solid #ddd;
-      align-items: stretch;
       min-height: 68vh;
     }
 
@@ -38,67 +36,77 @@
       box-shadow: 0 4px 14px rgba(0,0,0,0.06);
     }
 
-    /* 圖表卡：讓 Chart.js 吃滿高度 */
     .chartCard{
       padding: 12px;
       display: flex;
       flex-direction: column;
     }
+
     .chartBox{
       flex: 1;
       min-height: 520px;
     }
+
     canvas{
       width: 100% !important;
       height: 100% !important;
     }
 
-    /* 右側表格卡 */
     .tableCard{
       padding: 12px;
       display: flex;
       flex-direction: column;
     }
+
     .tableCard h3{
       margin: 6px 4px 10px;
       font-size: 15px;
     }
+
     .tableScroll{
       flex: 1;
       overflow: auto;
       border: 1px solid #eee;
       border-radius: 10px;
     }
+
     table{
       width: 100%;
       border-collapse: collapse;
       font-size: 13px;
     }
+
     th, td{
       padding: 8px 10px;
       border-bottom: 1px solid #eee;
       text-align: left;
     }
-    th{ background: #fafafa; position: sticky; top: 0; }
 
-    /* 下方操作區 */
+    th{
+      background: #fafafa;
+      position: sticky;
+      top: 0;
+    }
+
+    /* ===== 下方操作區（固定 5 欄，不跑版） ===== */
     .controls{
-  padding: 16px;
-  background: #fff;
-  display: grid;
+      padding: 16px;
+      background: #fff;
+      display: grid;
+      grid-template-columns: 220px 220px 220px 160px 160px;
+      gap: 12px;
+      align-items: end;
+      justify-content: start;
+      border-top: 1px solid #eee;
+    }
 
-  /* 固定 5 欄：3 個輸入 + 2 個按鈕 */
-  grid-template-columns: 220px 220px 220px 160px 160px;
+    label{
+      font-size: 13px;
+      display:block;
+      margin-bottom: 4px;
+      color:#333;
+    }
 
-  gap: 12px;
-  align-items: end;
-  justify-content: start; /* 不要把欄位拉滿整排 */
-}
-.controls button{
-  width: 100%;
-}
-    
-    label{ font-size: 13px; display:block; margin-bottom: 4px; color:#333; }
     select, input{
       width: 100%;
       padding: 10px;
@@ -106,16 +114,23 @@
       border: 1px solid #ccc;
       background: #fff;
     }
-    input[disabled]{ background:#eee; }
+
+    input[disabled]{
+      background:#eee;
+    }
+
     button{
+      width: 100%;
       padding: 11px 12px;
       border-radius: 10px;
       border: 1px solid #ccc;
       cursor: pointer;
       background: #fff;
     }
+
     .primary{ border-color:#111; }
     .danger{ border-color:#c00; }
+
     .status{
       grid-column: 1 / -1;
       color:#555;
@@ -123,16 +138,17 @@
       margin-top: 4px;
     }
 
-    /* 手機：改成上下排 */
+    /* ===== 手機版：全部直排 ===== */
     @media (max-width: 980px){
       .stage{
         grid-template-columns: 1fr;
         min-height: auto;
-      .controls{
-       grid-template-columns: 1fr;
       }
       .chartBox{
         min-height: 360px;
+      }
+      .controls{
+        grid-template-columns: 1fr;
       }
     }
   </style>
@@ -141,7 +157,7 @@
 <body>
 <h1>多人同步花費成本看板</h1>
 
-<!-- 上半部：左圖表 / 右目前花費成本（固定不疊） -->
+<!-- 上半部 -->
 <div class="stage">
   <div class="card chartCard">
     <div class="chartBox">
@@ -157,7 +173,7 @@
   </div>
 </div>
 
-<!-- 下半部：操作區 -->
+<!-- 下方操作區 -->
 <div class="controls">
   <div>
     <label>小幫手</label>
@@ -213,7 +229,6 @@
   const db = getFirestore(app);
   const ref = doc(db, "scoreboard", "main");
 
-  // 第一次才建立（避免 F5 覆蓋）
   const init = await getDoc(ref);
   if (!init.exists()) {
     await setDoc(ref, {
@@ -264,13 +279,12 @@
       const data = snap.data() || {};
       const costs = Array.isArray(data.costs) ? data.costs.slice() : Array(7).fill(0);
 
-      // 下限 0
       costs[group] = Math.max(0, (costs[group] ?? 0) + sign * Math.abs(delta));
-
       tx.set(ref, { costs, updatedAt: serverTimestamp() }, { merge: true });
     });
 
-    statusEl.textContent = `${GROUPS[group]} ${sign > 0 ? "增加" : "減少"} 成本 ${delta}`;
+    statusEl.textContent =
+      `${GROUPS[group]} ${sign > 0 ? "增加" : "減少"} 成本 ${delta}`;
   }
 
   document.getElementById("addBtn").onclick = () => apply(+1);
