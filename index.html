@@ -3,96 +3,177 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>各小組花費成本</title>
+  <title>多人同步花費成本看板</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
   <style>
-    body { font-family: system-ui, -apple-system, "Noto Sans TC", sans-serif; margin: 24px; }
-    .wrap { max-width: 1200px; margin: 0 auto; }
-    h1 { margin: 0 0 10px; }
-    .small { color:#666; font-size: 13px; line-height: 1.4; margin: 0 0 14px; }
+    body {
+      font-family: system-ui, -apple-system, "Noto Sans TC", sans-serif;
+      margin: 0;
+      background: #f5f6f8;
+    }
 
-    /* 主版面：左大（圖表）右小（操作+表格） */
-    .layout { display: grid; grid-template-columns: 2.4fr 1fr; gap: 16px; align-items: start; }
+    h1 {
+      margin: 16px;
+      font-size: 26px;
+    }
 
-    .card { border: 1px solid #ddd; border-radius: 12px; padding: 16px; background: #fff; }
+    .stage {
+      position: relative;
+      width: 100%;
+      height: 72vh;
+      background: #fff;
+      border-bottom: 1px solid #ddd;
+    }
 
-    label { display:block; font-size: 14px; margin: 10px 0 6px; }
-    select, input { width: 100%; padding: 10px; border-radius: 10px; border: 1px solid #ccc; }
-    input[disabled] { background:#f6f6f6; }
+    /* 全寬圖表 */
+    .chartBox {
+      position: absolute;
+      inset: 16px;
+    }
 
-    button { padding: 10px 12px; border-radius: 10px; border: 1px solid #ccc; cursor: pointer; }
-    button.primary { border-color: #111; }
-    button.danger { border-color: #c00; }
-    .btns { display:flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+    canvas {
+      width: 100% !important;
+      height: 100% !important;
+    }
 
-    /* 圖表更大 */
-    .chartBox { height: 620px; } /* 想更大改 700px */
-    canvas { width: 100% !important; height: 100% !important; }
+    /* 右下角小卡 */
+    .miniCard {
+      position: absolute;
+      right: 20px;
+      bottom: 20px;
+      width: 280px;
+      background: rgba(255,255,255,0.96);
+      border: 1px solid #ddd;
+      border-radius: 12px;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+      padding: 12px;
+    }
 
-    /* 右側表格縮小 */
-    .miniTitle { margin: 0 0 10px; font-size: 15px; }
-    table { width:100%; border-collapse: collapse; }
-    th, td { text-align:left; padding: 6px 8px; border-bottom: 1px solid #eee; font-size: 12px; }
-    th { color:#444; }
-    .tableScroll { max-height: 260px; overflow: auto; border: 1px solid #eee; border-radius: 10px; }
+    .miniCard h3 {
+      margin: 0 0 8px;
+      font-size: 14px;
+    }
 
-    .rightStack { display: grid; gap: 16px; }
+    .tableScroll {
+      max-height: 200px;
+      overflow-y: auto;
+    }
 
-    @media (max-width: 980px) {
-      .layout { grid-template-columns: 1fr; }
-      .chartBox { height: 420px; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+
+    th, td {
+      padding: 4px 6px;
+      border-bottom: 1px solid #eee;
+      text-align: left;
+    }
+
+    /* 操作區 */
+    .controls {
+      padding: 16px;
+      background: #fff;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+      align-items: end;
+    }
+
+    label {
+      font-size: 13px;
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    select, input {
+      width: 100%;
+      padding: 8px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+    }
+
+    input[disabled] {
+      background: #eee;
+    }
+
+    button {
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      cursor: pointer;
+    }
+
+    .primary { border-color: #111; }
+    .danger { border-color: #c00; }
+
+    .status {
+      grid-column: 1 / -1;
+      font-size: 13px;
+      color: #555;
+    }
+
+    @media (max-width: 900px) {
+      .stage { height: 56vh; }
+      .miniCard { width: 220px; }
     }
   </style>
 </head>
 <body>
-<div class="wrap">
-  <h1>各小組花費成本</h1>
-  <p class="small">小幫手只能操作自己對應的組別（防誤植）；花費成本最低為 0。</p>
 
-  <div class="layout">
-    <!-- 左：放大花費成本圖表 -->
-    <div class="card">
-      <div class="chartBox">
-        <canvas id="chart"></canvas>
-      </div>
-    </div>
+<h1>多人同步花費成本看板</h1>
 
-    <!-- 右：操作 + 目前花費成本（縮小） -->
-    <div class="rightStack">
-      <div class="card">
-        <label>小幫手</label>
-        <select id="helper">
-          <option>小幫手1</option>
-          <option>小幫手2</option>
-          <option>小幫手3</option>
-          <option>小幫手4</option>
-          <option>小幫手5</option>
-          <option>小幫手6</option>
-          <option>小幫手7</option>
-        </select>
+<!-- 舞台區 -->
+<div class="stage">
+  <div class="chartBox">
+    <canvas id="chart"></canvas>
+  </div>
 
-        <label>對應組別</label>
-        <input id="groupDisplay" disabled />
-
-        <label>花費成本（一次增加/減少多少）</label>
-        <input id="delta" type="number" value="1" min="1" step="1" />
-
-        <div class="btns">
-          <button class="primary" id="addBtn">增加成本</button>
-          <button class="danger" id="subBtn">減少成本</button>
-        </div>
-
-        <p class="small" id="status" style="margin-top:10px;"></p>
-      </div>
-
-      <div class="card">
-        <h3 class="miniTitle">目前花費成本</h3>
-        <div class="tableScroll">
-          <table id="scoreTable"></table>
-        </div>
-      </div>
+  <!-- 右下角小卡 -->
+  <div class="miniCard">
+    <h3>目前花費成本</h3>
+    <div class="tableScroll">
+      <table id="scoreTable"></table>
     </div>
   </div>
+</div>
+
+<!-- 操作區 -->
+<div class="controls">
+  <div>
+    <label>小幫手</label>
+    <select id="helper">
+      <option>小幫手1</option>
+      <option>小幫手2</option>
+      <option>小幫手3</option>
+      <option>小幫手4</option>
+      <option>小幫手5</option>
+      <option>小幫手6</option>
+      <option>小幫手7</option>
+    </select>
+  </div>
+
+  <div>
+    <label>對應組別</label>
+    <input id="groupDisplay" disabled />
+  </div>
+
+  <div>
+    <label>花費成本</label>
+    <input id="delta" type="number" value="1" min="1" />
+  </div>
+
+  <div>
+    <button class="primary" id="addBtn">增加成本</button>
+  </div>
+
+  <div>
+    <button class="danger" id="subBtn">減少成本</button>
+  </div>
+
+  <div class="status" id="status"></div>
 </div>
 
 <script type="module">
@@ -103,20 +184,18 @@
     getFirestore, doc, onSnapshot, runTransaction, serverTimestamp, setDoc, getDoc
   } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
 
-  const firebaseConfig = {
+  const app = initializeApp({
     apiKey: "AIzaSyDaVs55ij_E9B8WfAYkd4u1EjriQjnbs0k",
     authDomain: "techleague-e39af.firebaseapp.com",
     projectId: "techleague-e39af",
     storageBucket: "techleague-e39af.firebasestorage.app",
     messagingSenderId: "841227476998",
     appId: "1:841227476998:web:a7f1bdd601b5b627f02387"
-  };
+  });
 
-  const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
   const ref = doc(db, "scoreboard", "main");
 
-  // 第一次才建立資料（避免 F5 覆蓋）
   const init = await getDoc(ref);
   if (!init.exists()) {
     await setDoc(ref, {
@@ -136,29 +215,46 @@
 
   const chart = new Chart(document.getElementById("chart"), {
     type: "bar",
-    data: { labels: GROUPS, datasets: [{ label:"花費成本", data: Array(GROUPS.length).fill(0) }] },
+    data: { labels: GROUPS, datasets: [{ label:"花費成本", data: Array(7).fill(0) }] },
     options: {
       responsive: true,
-      maintainAspectRatio: false, // 讓圖表吃滿 .chartBox
+      maintainAspectRatio: false,
       animation: false,
       scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
     }
   });
 
   onSnapshot(ref, snap => {
-    const data = snap.data() || {};
-    const costs = Array.isArray(data.costs) ? data.costs : Array(GROUPS.length).fill(0);
+    const costs = snap.data()?.costs || Array(7).fill(0);
 
     chart.data.datasets[0].data = costs.slice();
     chart.update();
 
     document.getElementById("scoreTable").innerHTML =
-      "<tr><th>組別</th><th>花費成本</th></tr>" +
-      GROUPS.map((g,i)=>`<tr><td>${g}</td><td>${costs[i] ?? 0}</td></tr>`).join("");
+      "<tr><th>組別</th><th>成本</th></tr>" +
+      GROUPS.map((g,i)=>`<tr><td>${g}</td><td>${costs[i]}</td></tr>`).join("");
   });
-
-  function setStatus(msg) { statusEl.textContent = msg; }
 
   async function apply(sign) {
     const delta = parseInt(document.getElementById("delta").value, 10);
-    if (!Number.isFi
+    const group = helperIndex();
+
+    if (!Number.isFinite(delta) || delta <= 0) return;
+
+    await runTransaction(db, async tx => {
+      const snap = await tx.get(ref);
+      const costs = snap.data().costs.slice();
+      costs[group] = Math.max(0, costs[group] + sign * delta);
+      tx.set(ref, { costs, updatedAt: serverTimestamp() }, { merge:true });
+    });
+
+    statusEl.textContent =
+      `${GROUPS[group]} ${sign > 0 ? "增加" : "減少"} 成本 ${delta}`;
+  }
+
+  document.getElementById("addBtn").onclick = () => apply(+1);
+  document.getElementById("subBtn").onclick = () => apply(-1);
+</script>
+
+</body>
+</html>
