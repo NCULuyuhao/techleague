@@ -14,7 +14,7 @@ body{
 }
 h1{ margin:16px; }
 
-/* ===== 上方：圖表＋表格 ===== */
+/* ===== 上方 ===== */
 .stage{
   display:grid;
   grid-template-columns:3fr 1.2fr;
@@ -30,6 +30,7 @@ h1{ margin:16px; }
 .chartBox{ height:520px; padding:12px; }
 canvas{ width:100%!important; height:100%!important; }
 
+/* ===== 表格 ===== */
 .tableCard{ padding:12px; }
 .tableCard h3{ margin:6px 4px 10px; }
 .tableScroll{
@@ -48,16 +49,15 @@ th,td{
   border-bottom:1px solid #eee;
   text-align:left;
 }
-th{ background:#fafafa; position:sticky; top:0; }
+th{ background:#fafafa; }
 
-/* ===== 下方操作區（關鍵修正在這） ===== */
+/* ===== 下方操作區（重點修正） ===== */
 .controls{
   background:#fff;
   border-top:1px solid #eee;
   padding:16px;
-
   display:grid;
-  grid-template-columns: 220px 220px 220px 160px 160px;
+  grid-template-columns:220px 220px 220px 160px 160px;
   gap:16px;
   align-items:end;
 }
@@ -68,27 +68,26 @@ th{ background:#fafafa; position:sticky; top:0; }
   display:block;
 }
 
+/* 🔥 關鍵：所有 control 強制同高 */
 .controlItem select,
-.controlItem input{
-  width:100%;
-  padding:10px;
-  border-radius:10px;
-  border:1px solid #ccc;
-}
-
-.controlItem input[disabled]{ background:#eee; }
-
+.controlItem input,
 .controlItem button{
   width:100%;
-  padding:11px;
+  height:44px;
+  padding:0 12px;
   border-radius:10px;
   border:1px solid #ccc;
-  background:#fff;
-  cursor:pointer;
+  box-sizing:border-box;
+  font-size:14px;
 }
 
-.primary{ border-color:#111; }
-.danger{ border-color:#c00; }
+.controlItem input[disabled]{
+  background:#eee;
+  color:#666;
+}
+
+.primary{ border-color:#111; background:#fff; }
+.danger{ border-color:#c00; background:#fff; }
 
 .status{
   grid-column:1 / -1;
@@ -123,7 +122,6 @@ th{ background:#fafafa; position:sticky; top:0; }
   </div>
 </div>
 
-<!-- ✅ 下方操作區：每一欄都是 controlItem -->
 <div class="controls">
   <div class="controlItem">
     <label>小幫手</label>
@@ -183,12 +181,10 @@ if(!init.exists()){
 
 const helperSel=document.getElementById("helper");
 const groupDisplay=document.getElementById("groupDisplay");
-const statusEl=document.getElementById("status");
-
-function helperIndex(){ return helperSel.selectedIndex; }
-function syncGroup(){ groupDisplay.value=GROUPS[helperIndex()]; }
-helperSel.onchange=syncGroup;
-syncGroup();
+function idx(){ return helperSel.selectedIndex; }
+function sync(){ groupDisplay.value=GROUPS[idx()]; }
+helperSel.onchange=sync;
+sync();
 
 const chart=new Chart(document.getElementById("chart"),{
   type:"bar",
@@ -201,25 +197,23 @@ onSnapshot(ref,snap=>{
   const costs=snap.data()?.costs||Array(7).fill(0);
   chart.data.datasets[0].data=costs;
   chart.update();
-
   document.getElementById("scoreTable").innerHTML=
     "<tr><th>組別</th><th>成本</th></tr>"+
     GROUPS.map((g,i)=>`<tr><td>${g}</td><td>${costs[i]}</td></tr>`).join("");
 });
 
 async function apply(sign){
-  const delta=parseInt(deltaInput.value,10);
-  if(delta<=0) return;
-  const g=helperIndex();
+  const d=parseInt(delta.value,10);
+  if(d<=0) return;
+  const g=idx();
   await runTransaction(db,async tx=>{
     const snap=await tx.get(ref);
     const costs=snap.data().costs.slice();
-    costs[g]=Math.max(0,costs[g]+sign*delta);
+    costs[g]=Math.max(0,costs[g]+sign*d);
     tx.set(ref,{costs,updatedAt:serverTimestamp()},{merge:true});
   });
 }
 
-const deltaInput=document.getElementById("delta");
 document.getElementById("addBtn").onclick=()=>apply(+1);
 document.getElementById("subBtn").onclick=()=>apply(-1);
 </script>
