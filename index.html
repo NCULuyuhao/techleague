@@ -95,8 +95,8 @@
   // ====== Firebase ======
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
   import {
-    getFirestore, doc, onSnapshot, runTransaction, serverTimestamp, setDoc
-  } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
+  getFirestore, doc, onSnapshot, runTransaction, serverTimestamp, setDoc, getDoc
+} from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyDaVs55ij_E9B8WfAYkd4u1EjriQjnbs0k",
@@ -143,12 +143,16 @@
   function setStatus(msg) { document.getElementById("status").textContent = msg; }
   function escapeHtml(s) { return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
 
-  // 確保文件存在
+  // 只在文件不存在時才初始化（避免 F5 覆蓋分數）
+const initSnap = await getDoc(ref);
+if (!initSnap.exists()) {
   await setDoc(ref, {
     scores: Array(GROUPS.length).fill(0),
     log: [],
     updatedAt: serverTimestamp()
-  }, { merge: true });
+  });
+}
+
 
   // 任何人更新 -> 所有人 UI 更新
   onSnapshot(ref, (snap) => {
