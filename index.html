@@ -53,8 +53,7 @@
       <div class="btns">
         <button class="primary" id="addBtn">加分</button>
         <button class="danger" id="subBtn">減分</button>
-        <button id="undoBtn">撤銷最後一筆</button>
-        <button id="resetBtn">重置全部分數</button>
+        
       </div>
 
       <p class="small" id="mode"></p>
@@ -214,35 +213,9 @@ if (!initSnap.exists()) {
   document.getElementById("addBtn").addEventListener("click", () => apply(+1));
   document.getElementById("subBtn").addEventListener("click", () => apply(-1));
 
-  document.getElementById("undoBtn").addEventListener("click", async () => {
-    if (!canWrite) { setStatus("唯讀模式，無法撤銷。"); return; }
+  
 
-    await runTransaction(db, async (tx) => {
-      const snap = await tx.get(ref);
-      const data = snap.data() || {};
-      const scores = Array.isArray(data.scores) ? data.scores.slice() : Array(GROUPS.length).fill(0);
-      const log = Array.isArray(data.log) ? data.log.slice() : [];
-
-      const last = log.pop();
-      if (!last) return;
-
-      scores[last.group] = (scores[last.group] ?? 0) - last.delta;
-      tx.set(ref, { scores, log, updatedAt: serverTimestamp() }, { merge: true });
-    });
-
-    setStatus("已撤銷最後一筆。");
-  });
-
-  document.getElementById("resetBtn").addEventListener("click", async () => {
-    if (!canWrite) { setStatus("唯讀模式，無法重置。"); return; }
-    if (!confirm("確定要重置全部分數與紀錄嗎？")) return;
-
-    await runTransaction(db, async (tx) => {
-      tx.set(ref, { scores: Array(GROUPS.length).fill(0), log: [], updatedAt: serverTimestamp() }, { merge: true });
-    });
-
-    setStatus("已重置。");
-  });
+ 
 </script>
 </body>
 </html>
