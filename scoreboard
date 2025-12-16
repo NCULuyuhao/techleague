@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>7組記分板</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <style>
+    body { font-family: system-ui, -apple-system, "Noto Sans TC", sans-serif; margin: 24px; }
+    .wrap { max-width: 980px; margin: 0 auto; }
+    h1 { margin: 0 0 12px; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .card { border: 1px solid #ddd; border-radius: 12px; padding: 16px; }
+    label { display:block; font-size: 14px; margin: 10px 0 6px; }
+    select, input { width: 100%; padding: 10px; border-radius: 10px; border: 1px solid #ccc; }
+    button { padding: 10px 12px; border-radius: 10px; border: 1px solid #ccc; cursor: pointer; }
+    button.primary { border-color: #111; }
+    button.danger { border-color: #c00; }
+    .btns { display:flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+    .small { color:#666; font-size: 13px; line-height: 1.4; }
+    table { width:100%; border-collapse: collapse; }
+    th, td { text-align:left; padding: 8px; border-bottom: 1px solid #eee; font-size: 14px; }
+    .pill { display:inline-block; padding: 2px 8px; border: 1px solid #ddd; border-radius: 999px; font-size: 12px; }
+    .log { max-height: 260px; overflow:auto; }
+    @media (max-width: 860px) { .row { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <h1>7組記分板</h1>
+  <p class="small">
+    ✅ 加分/減分都會記錄在操作紀錄，可一鍵撤銷最後一筆。<br>
+    ✅ 分數會存在此裝置瀏覽器（localStorage），重整不會不見。若要多人同步，需改用共用資料來源（我也可以幫你升級）。
+  </p>
+
+  <div class="row">
+    <div class="card">
+      <h2 style="margin:0 0 8px;">輸入分數</h2>
+
+      <label>小幫手</label>
+      <select id="helper">
+        <option>小幫手1</option><option>小幫手2</option><option>小幫手3</option>
+        <option>小幫手4</option><option>小幫手5</option><option>小幫手6</option><option>小幫手7</option>
+      </select>
+
+      <label>組別（共7組）</label>
+      <select id="group"></select>
+
+      <label>分數（一次加/扣多少）</label>
+      <input id="delta" type="number" value="1" step="1" />
+
+      <div class="btns">
+        <button class="primary" id="addBtn">加分</button>
+        <button class="danger" id="subBtn">減分</button>
+        <button id="undoBtn">撤銷最後一筆</button>
+        <button id="resetBtn">重置全部分數</button>
+      </div>
+
+      <p class="small" id="status"></p>
+    </div>
+
+    <div class="card">
+      <h2 style="margin:0 0 8px;">視覺化</h2>
+      <canvas id="chart" height="160"></canvas>
+      <div style="margin-top:12px;">
+        <span class="pill">總分：<b id="totalScore">0</b></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="row" style="margin-top:16px;">
+    <div class="card">
+      <h2 style="margin:0 0 8px;">目前分數</h2>
+      <table id="scoreTable"></table>
+    </div>
+
+    <div class="card">
+      <h2 style="margin:0 0 8px;">操作紀錄</h2>
+      <div class="log">
+        <table id="logTable"></table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ====== 可自訂：組別名稱 ======
+  const GROUPS = ["第1組","第2組","第3組","第4組","第5組","第6組","第7組"];
+
+  // ====== 儲存鍵 ======
+  const KEY = "scoreboard_v1";
+
+  // ====== 狀態 ======
+  const state = loadState();
+
+  // ====== 初始化下拉 ======
+  const groupSel = document.getElementById("group");
+  GROUPS.forEach((g, i) => {
+    const opt = document.createElement("option");
+    opt.value = i;
+    opt.textContent = g;
+    groupSel.appendChild(opt);
+  });
+
+  // ====== Chart.js ======
+  const ctx = document.getElementById("chart");
+  const chart = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels: GROUPS,
+      datasets: [{
+        label: "分數",
+        data: state.scores
+      }]
+    },
+    options: {
+      responsive: true,
+      animation: false,
+      scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+    }
+  });
+
+  // ====== UI Render ======
+  function render() {
+    // chart
+    chart.data.datasets[0].data = state.scores.slice();
+    chart.update();
+
+    // total
+    const total = state.scores.reduce((a,b)=>a+b,0);
+    document.getElementById("totalScore").textContent = total;
+
+    // score table
+    const t = document.getElementById("scoreTable");
+    t.innerHTML = `
+      <tr><th>組別</th><th>分數</th></tr>
+      ${GROUPS.map((g,i)=>`<tr><td>${g}</td><td><b>${state.scores[i]}</b></td></tr>`).join("")}
+    `;
+
+    // log table
+    const lt = document.getElementById("logTable");
+    lt.innerHTML = `
+      <tr><th>時間</th><th>小幫手</th><th>組別</th><th>動作</th><th>分數</th></tr>
+      ${state.log.slice().reverse().map(x=>`
+        <tr>
+          <td>${new Date(x.ts).toLocaleString()}</td>
+          <td>${escapeHtml(x.helper)}</td>
+          <td>${GROUPS[x.group]}</td>
+          <td>${x.type === "add" ? "加分" : "減分"}</td>
+          <td>${x.delta}</td>
+        </tr>
+      `).join("")}
+    `;
+
+    saveState();
+  }
+
+  function setStatus(msg) {
+    document.getElementById("status").textContent = msg;
+  }
+
+  // ====== Actions ======
+  function apply(type) {
+    const helper = document.getElementById("helper").value;
+    const group = parseInt(document.getElementById("group").value, 10);
+    const delta = parseInt(document.getElementById("delta").value, 10);
+
+    if (!Number.isFinite(delta) || delta === 0) {
+      setStatus("分數請輸入非 0 的整數。");
+      return;
+    }
+
+    const signed = type === "add" ? Math.abs(delta) : -Math.abs(delta);
+    state.scores[group] += signed;
+
+    state.log.push({
+      ts: Date.now(),
+      helper,
+      group,
+      type,
+      delta: signed
+    });
+
+    setStatus(`${helper} 對 ${GROUPS[group]} ${type === "add" ? "加" : "減"}了 ${Math.abs(delta)} 分`);
+    render();
+  }
+
+  document.getElementById("addBtn").addEventListener("click", () => apply("add"));
+  document.getElementById("subBtn").addEventListener("click", () => apply("sub"));
+
+  document.getElementById("undoBtn").addEventListener("click", () => {
+    const last = state.log.pop();
+    if (!last) { setStatus("沒有可撤銷的紀錄。"); return; }
+    state.scores[last.group] -= last.delta; // 反向操作
+    setStatus(`已撤銷：${last.helper} ${GROUPS[last.group]} ${last.delta > 0 ? "加" : "減"} ${Math.abs(last.delta)} 分`);
+    render();
+  });
+
+  document.getElementById("resetBtn").addEventListener("click", () => {
+    if (!confirm("確定要重置全部分數與紀錄嗎？")) return;
+    state.scores = Array(GROUPS.length).fill(0);
+    state.log = [];
+    setStatus("已重置。");
+    render();
+  });
+
+  // ====== Storage ======
+  function loadState() {
+    try {
+      const raw = localStorage.getItem(KEY);
+      if (!raw) return { scores: Array(GROUPS.length).fill(0), log: [] };
+      const parsed = JSON.parse(raw);
+      if (!parsed.scores || parsed.scores.length !== GROUPS.length) throw new Error();
+      return { scores: parsed.scores, log: parsed.log || [] };
+    } catch {
+      return { scores: Array(GROUPS.length).fill(0), log: [] };
+    }
+  }
+
+  function saveState() {
+    localStorage.setItem(KEY, JSON.stringify(state));
+  }
+
+  function escapeHtml(s) {
+    return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  }
+
+  render();
+</script>
+</body>
+</html>
