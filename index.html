@@ -29,12 +29,9 @@
 
     /* ✅ 圖表讓出右下角空間（避免被小卡擋到） */
     .chartBox {
-      position: absolute;
-      top: 16px;
-      left: 16px;
-      right: 320px;  /* 小卡 280px + 邊距 */
-      bottom: 260px; /* 小卡高度 + 邊距 */
-    }
+  position: absolute;
+  inset: 16px;
+}
 
     canvas {
       width: 100% !important;
