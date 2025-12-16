@@ -18,6 +18,7 @@
       font-size: 26px;
     }
 
+    /* 舞台區（主視覺：全寬圖表） */
     .stage {
       position: relative;
       width: 100%;
@@ -26,31 +27,47 @@
       border-bottom: 1px solid #ddd;
     }
 
-    /* 全寬圖表 */
+    /* ✅ 圖表讓出右下角空間（避免被小卡擋到） */
     .chartBox {
-  position: absolute;
-  top: 16px;
-  left: 16px;
-  right: 320px;   /* 讓出右側給小卡（280px + 邊距） */
-  bottom: 260px;  /* 讓出下方給小卡（高度+邊距） */
-}
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      right: 320px;  /* 小卡 280px + 邊距 */
+      bottom: 260px; /* 小卡高度 + 邊距 */
+    }
 
     canvas {
       width: 100% !important;
       height: 100% !important;
     }
 
-    /* 右下角小卡 */
+    /* 右下角 HUD 小卡（半透明 + hover 才完整顯示） */
     .miniCard {
       position: absolute;
       right: 20px;
       bottom: 20px;
       width: 280px;
-      background: rgba(255,255,255,0.96);
-      border: 1px solid #ddd;
+
+      background: rgba(255,255,255,0.55); /* 半透明 */
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+
+      border: 1px solid rgba(0,0,0,0.15);
       border-radius: 12px;
-      box-shadow: 0 6px 20px rgba(0,0,0,0.15);
       padding: 12px;
+
+      box-shadow: 0 4px 14px rgba(0,0,0,0.12);
+
+      transition:
+        background 0.25s ease,
+        box-shadow 0.25s ease,
+        transform 0.25s ease;
+    }
+
+    .miniCard:hover {
+      background: rgba(255,255,255,0.95); /* hover 完整顯示 */
+      box-shadow: 0 10px 28px rgba(0,0,0,0.25);
+      transform: scale(1.04);
     }
 
     .miniCard h3 {
@@ -67,15 +84,18 @@
       width: 100%;
       border-collapse: collapse;
       font-size: 12px;
+      opacity: 0.75;                 /* 平常淡一點 */
+      transition: opacity 0.2s ease; /* hover 變清楚 */
     }
+    .miniCard:hover table { opacity: 1; }
 
     th, td {
       padding: 4px 6px;
-      border-bottom: 1px solid #eee;
+      border-bottom: 1px solid rgba(0,0,0,0.08);
       text-align: left;
     }
 
-    /* 操作區 */
+    /* 操作區（下方） */
     .controls {
       padding: 16px;
       background: #fff;
@@ -98,9 +118,7 @@
       border: 1px solid #ccc;
     }
 
-    input[disabled] {
-      background: #eee;
-    }
+    input[disabled] { background: #eee; }
 
     button {
       padding: 10px;
@@ -118,23 +136,36 @@
       color: #555;
     }
 
+    /* 手機：不要浮動小卡，避免太擠 */
     @media (max-width: 900px) {
       .stage { height: 56vh; }
-      .miniCard { width: 220px; }
+
+      .chartBox {
+        right: 16px;
+        bottom: 16px;
+      }
+
+      .miniCard {
+        position: static;
+        width: auto;
+        margin: 12px 16px;
+        transform: none !important;
+      }
+
+      .miniCard:hover { transform: none; }
     }
   </style>
 </head>
-<body>
 
+<body>
 <h1>多人同步花費成本看板</h1>
 
-<!-- 舞台區 -->
+<!-- 舞台區：全寬圖表 + 右下角 HUD 小卡 -->
 <div class="stage">
   <div class="chartBox">
     <canvas id="chart"></canvas>
   </div>
 
-  <!-- 右下角小卡 -->
   <div class="miniCard">
     <h3>目前花費成本</h3>
     <div class="tableScroll">
@@ -143,7 +174,7 @@
   </div>
 </div>
 
-<!-- 操作區 -->
+<!-- 操作區（下方） -->
 <div class="controls">
   <div>
     <label>小幫手</label>
@@ -165,7 +196,7 @@
 
   <div>
     <label>花費成本</label>
-    <input id="delta" type="number" value="1" min="1" />
+    <input id="delta" type="number" value="1" min="1" step="1" />
   </div>
 
   <div>
@@ -199,6 +230,7 @@
   const db = getFirestore(app);
   const ref = doc(db, "scoreboard", "main");
 
+  // 第一次才建立（避免 F5 覆蓋）
   const init = await getDoc(ref);
   if (!init.exists()) {
     await setDoc(ref, {
@@ -235,7 +267,7 @@
 
     document.getElementById("scoreTable").innerHTML =
       "<tr><th>組別</th><th>成本</th></tr>" +
-      GROUPS.map((g,i)=>`<tr><td>${g}</td><td>${costs[i]}</td></tr>`).join("");
+      GROUPS.map((g,i)=>`<tr><td>${g}</td><td>${costs[i] ?? 0}</td></tr>`).join("");
   });
 
   async function apply(sign) {
@@ -246,18 +278,20 @@
 
     await runTransaction(db, async tx => {
       const snap = await tx.get(ref);
-      const costs = snap.data().costs.slice();
-      costs[group] = Math.max(0, costs[group] + sign * delta);
-      tx.set(ref, { costs, updatedAt: serverTimestamp() }, { merge:true });
+      const data = snap.data() || {};
+      const costs = Array.isArray(data.costs) ? data.costs.slice() : Array(7).fill(0);
+
+      // 下限 0
+      costs[group] = Math.max(0, (costs[group] ?? 0) + sign * Math.abs(delta));
+
+      tx.set(ref, { costs, updatedAt: serverTimestamp() }, { merge: true });
     });
 
-    statusEl.textContent =
-      `${GROUPS[group]} ${sign > 0 ? "增加" : "減少"} 成本 ${delta}`;
+    statusEl.textContent = `${GROUPS[group]} ${sign > 0 ? "增加" : "減少"} 成本 ${delta}`;
   }
 
   document.getElementById("addBtn").onclick = () => apply(+1);
   document.getElementById("subBtn").onclick = () => apply(-1);
 </script>
-
 </body>
 </html>
