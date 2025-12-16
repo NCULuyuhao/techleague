@@ -1,165 +1,115 @@
 <!doctype html>
 <html lang="zh-Hant">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>多人同步花費成本看板</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>多人同步花費成本看板</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 
-  <style>
-    body{
-      font-family: system-ui, -apple-system, "Noto Sans TC", sans-serif;
-      margin: 0;
-      background: #f5f6f8;
-    }
+<style>
+body{
+  font-family: system-ui, -apple-system, "Noto Sans TC", sans-serif;
+  margin:0;
+  background:#f5f6f8;
+}
+h1{ margin:16px; }
 
-    h1{
-      margin: 16px;
-      font-size: 26px;
-    }
+/* ===== 上方：圖表＋表格 ===== */
+.stage{
+  display:grid;
+  grid-template-columns:3fr 1.2fr;
+  gap:16px;
+  padding:16px;
+  background:#fff;
+}
+.card{
+  background:#fff;
+  border:1px solid #ddd;
+  border-radius:12px;
+}
+.chartBox{ height:520px; padding:12px; }
+canvas{ width:100%!important; height:100%!important; }
 
-    /* ===== 上半部：圖表 + 目前花費成本 ===== */
-    .stage{
-      display: grid;
-      grid-template-columns: 3fr 1.2fr;
-      gap: 16px;
-      padding: 16px;
-      background: #fff;
-      border-bottom: 1px solid #ddd;
-      min-height: 68vh;
-    }
+.tableCard{ padding:12px; }
+.tableCard h3{ margin:6px 4px 10px; }
+.tableScroll{
+  max-height:480px;
+  overflow:auto;
+  border:1px solid #eee;
+  border-radius:10px;
+}
+table{
+  width:100%;
+  border-collapse:collapse;
+  font-size:13px;
+}
+th,td{
+  padding:8px 10px;
+  border-bottom:1px solid #eee;
+  text-align:left;
+}
+th{ background:#fafafa; position:sticky; top:0; }
 
-    .card{
-      background: #fff;
-      border: 1px solid #ddd;
-      border-radius: 12px;
-      box-shadow: 0 4px 14px rgba(0,0,0,0.06);
-    }
+/* ===== 下方操作區（關鍵修正在這） ===== */
+.controls{
+  background:#fff;
+  border-top:1px solid #eee;
+  padding:16px;
 
-    .chartCard{
-      padding: 12px;
-      display: flex;
-      flex-direction: column;
-    }
+  display:grid;
+  grid-template-columns: 220px 220px 220px 160px 160px;
+  gap:16px;
+  align-items:end;
+}
 
-    .chartBox{
-      flex: 1;
-      min-height: 520px;
-    }
+.controlItem label{
+  font-size:13px;
+  margin-bottom:4px;
+  display:block;
+}
 
-    canvas{
-      width: 100% !important;
-      height: 100% !important;
-    }
+.controlItem select,
+.controlItem input{
+  width:100%;
+  padding:10px;
+  border-radius:10px;
+  border:1px solid #ccc;
+}
 
-    .tableCard{
-      padding: 12px;
-      display: flex;
-      flex-direction: column;
-    }
+.controlItem input[disabled]{ background:#eee; }
 
-    .tableCard h3{
-      margin: 6px 4px 10px;
-      font-size: 15px;
-    }
+.controlItem button{
+  width:100%;
+  padding:11px;
+  border-radius:10px;
+  border:1px solid #ccc;
+  background:#fff;
+  cursor:pointer;
+}
 
-    .tableScroll{
-      flex: 1;
-      overflow: auto;
-      border: 1px solid #eee;
-      border-radius: 10px;
-    }
+.primary{ border-color:#111; }
+.danger{ border-color:#c00; }
 
-    table{
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 13px;
-    }
+.status{
+  grid-column:1 / -1;
+  font-size:13px;
+  color:#555;
+}
 
-    th, td{
-      padding: 8px 10px;
-      border-bottom: 1px solid #eee;
-      text-align: left;
-    }
-
-    th{
-      background: #fafafa;
-      position: sticky;
-      top: 0;
-    }
-
-    /* ===== 下方操作區（固定 5 欄，不跑版） ===== */
-    .controls{
-      padding: 16px;
-      background: #fff;
-      display: grid;
-      grid-template-columns: 220px 220px 220px 160px 160px;
-      gap: 12px;
-      align-items: end;
-      justify-content: start;
-      border-top: 1px solid #eee;
-    }
-
-    label{
-      font-size: 13px;
-      display:block;
-      margin-bottom: 4px;
-      color:#333;
-    }
-
-    select, input{
-      width: 100%;
-      padding: 10px;
-      border-radius: 10px;
-      border: 1px solid #ccc;
-      background: #fff;
-    }
-
-    input[disabled]{
-      background:#eee;
-    }
-
-    button{
-      width: 100%;
-      padding: 11px 12px;
-      border-radius: 10px;
-      border: 1px solid #ccc;
-      cursor: pointer;
-      background: #fff;
-    }
-
-    .primary{ border-color:#111; }
-    .danger{ border-color:#c00; }
-
-    .status{
-      grid-column: 1 / -1;
-      color:#555;
-      font-size: 13px;
-      margin-top: 4px;
-    }
-
-    /* ===== 手機版：全部直排 ===== */
-    @media (max-width: 980px){
-      .stage{
-        grid-template-columns: 1fr;
-        min-height: auto;
-      }
-      .chartBox{
-        min-height: 360px;
-      }
-      .controls{
-        grid-template-columns: 1fr;
-      }
-    }
-  </style>
+/* 手機 */
+@media (max-width:980px){
+  .stage{ grid-template-columns:1fr; }
+  .chartBox{ height:360px; }
+  .controls{ grid-template-columns:1fr; }
+}
+</style>
 </head>
 
 <body>
 <h1>多人同步花費成本看板</h1>
 
-<!-- 上半部 -->
 <div class="stage">
-  <div class="card chartCard">
+  <div class="card">
     <div class="chartBox">
       <canvas id="chart"></canvas>
     </div>
@@ -173,9 +123,9 @@
   </div>
 </div>
 
-<!-- 下方操作區 -->
+<!-- ✅ 下方操作區：每一欄都是 controlItem -->
 <div class="controls">
-  <div>
+  <div class="controlItem">
     <label>小幫手</label>
     <select id="helper">
       <option>小幫手1</option>
@@ -188,21 +138,21 @@
     </select>
   </div>
 
-  <div>
+  <div class="controlItem">
     <label>對應組別</label>
     <input id="groupDisplay" disabled />
   </div>
 
-  <div>
+  <div class="controlItem">
     <label>花費成本</label>
-    <input id="delta" type="number" value="1" min="1" step="1" />
+    <input id="delta" type="number" value="1" min="1"/>
   </div>
 
-  <div>
+  <div class="controlItem">
     <button class="primary" id="addBtn">增加成本</button>
   </div>
 
-  <div>
+  <div class="controlItem">
     <button class="danger" id="subBtn">減少成本</button>
   </div>
 
@@ -210,85 +160,68 @@
 </div>
 
 <script type="module">
-  const GROUPS = ["第1組","第2組","第3組","第4組","第5組","第6組","第7組"];
+const GROUPS=["第1組","第2組","第3組","第4組","第5組","第6組","第7組"];
 
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
-  import {
-    getFirestore, doc, onSnapshot, runTransaction, serverTimestamp, setDoc, getDoc
-  } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
+import {
+  getFirestore, doc, onSnapshot, runTransaction,
+  serverTimestamp, setDoc, getDoc
+} from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
 
-  const app = initializeApp({
-    apiKey: "AIzaSyDaVs55ij_E9B8WfAYkd4u1EjriQjnbs0k",
-    authDomain: "techleague-e39af.firebaseapp.com",
-    projectId: "techleague-e39af",
-    storageBucket: "techleague-e39af.firebasestorage.app",
-    messagingSenderId: "841227476998",
-    appId: "1:841227476998:web:a7f1bdd601b5b627f02387"
+const app=initializeApp({
+  apiKey:"AIzaSyDaVs55ij_E9B8WfAYkd4u1EjriQjnbs0k",
+  authDomain:"techleague-e39af.firebaseapp.com",
+  projectId:"techleague-e39af"
+});
+const db=getFirestore(app);
+const ref=doc(db,"scoreboard","main");
+
+const init=await getDoc(ref);
+if(!init.exists()){
+  await setDoc(ref,{ costs:Array(7).fill(0), updatedAt:serverTimestamp() });
+}
+
+const helperSel=document.getElementById("helper");
+const groupDisplay=document.getElementById("groupDisplay");
+const statusEl=document.getElementById("status");
+
+function helperIndex(){ return helperSel.selectedIndex; }
+function syncGroup(){ groupDisplay.value=GROUPS[helperIndex()]; }
+helperSel.onchange=syncGroup;
+syncGroup();
+
+const chart=new Chart(document.getElementById("chart"),{
+  type:"bar",
+  data:{ labels:GROUPS, datasets:[{ label:"花費成本", data:Array(7).fill(0) }]},
+  options:{ responsive:true, maintainAspectRatio:false, animation:false,
+    scales:{ y:{ beginAtZero:true }}}
+});
+
+onSnapshot(ref,snap=>{
+  const costs=snap.data()?.costs||Array(7).fill(0);
+  chart.data.datasets[0].data=costs;
+  chart.update();
+
+  document.getElementById("scoreTable").innerHTML=
+    "<tr><th>組別</th><th>成本</th></tr>"+
+    GROUPS.map((g,i)=>`<tr><td>${g}</td><td>${costs[i]}</td></tr>`).join("");
+});
+
+async function apply(sign){
+  const delta=parseInt(deltaInput.value,10);
+  if(delta<=0) return;
+  const g=helperIndex();
+  await runTransaction(db,async tx=>{
+    const snap=await tx.get(ref);
+    const costs=snap.data().costs.slice();
+    costs[g]=Math.max(0,costs[g]+sign*delta);
+    tx.set(ref,{costs,updatedAt:serverTimestamp()},{merge:true});
   });
+}
 
-  const db = getFirestore(app);
-  const ref = doc(db, "scoreboard", "main");
-
-  const init = await getDoc(ref);
-  if (!init.exists()) {
-    await setDoc(ref, {
-      costs: Array(GROUPS.length).fill(0),
-      updatedAt: serverTimestamp()
-    });
-  }
-
-  const helperSel = document.getElementById("helper");
-  const groupDisplay = document.getElementById("groupDisplay");
-  const statusEl = document.getElementById("status");
-
-  function helperIndex(){ return helperSel.selectedIndex; }
-  function syncGroup(){ groupDisplay.value = GROUPS[helperIndex()] || ""; }
-  helperSel.addEventListener("change", syncGroup);
-  syncGroup();
-
-  const chart = new Chart(document.getElementById("chart"), {
-    type: "bar",
-    data: { labels: GROUPS, datasets: [{ label:"花費成本", data: Array(7).fill(0) }] },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      animation: false,
-      scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
-    }
-  });
-
-  onSnapshot(ref, snap => {
-    const data = snap.data() || {};
-    const costs = Array.isArray(data.costs) ? data.costs : Array(7).fill(0);
-
-    chart.data.datasets[0].data = costs.slice();
-    chart.update();
-
-    document.getElementById("scoreTable").innerHTML =
-      "<tr><th>組別</th><th>成本</th></tr>" +
-      GROUPS.map((g,i)=>`<tr><td>${g}</td><td>${costs[i] ?? 0}</td></tr>`).join("");
-  });
-
-  async function apply(sign){
-    const delta = parseInt(document.getElementById("delta").value, 10);
-    const group = helperIndex();
-    if (!Number.isFinite(delta) || delta <= 0) return;
-
-    await runTransaction(db, async tx => {
-      const snap = await tx.get(ref);
-      const data = snap.data() || {};
-      const costs = Array.isArray(data.costs) ? data.costs.slice() : Array(7).fill(0);
-
-      costs[group] = Math.max(0, (costs[group] ?? 0) + sign * Math.abs(delta));
-      tx.set(ref, { costs, updatedAt: serverTimestamp() }, { merge: true });
-    });
-
-    statusEl.textContent =
-      `${GROUPS[group]} ${sign > 0 ? "增加" : "減少"} 成本 ${delta}`;
-  }
-
-  document.getElementById("addBtn").onclick = () => apply(+1);
-  document.getElementById("subBtn").onclick = () => apply(-1);
+const deltaInput=document.getElementById("delta");
+document.getElementById("addBtn").onclick=()=>apply(+1);
+document.getElementById("subBtn").onclick=()=>apply(-1);
 </script>
 </body>
 </html>
