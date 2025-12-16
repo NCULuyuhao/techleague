@@ -28,9 +28,12 @@
 
     /* 全寬圖表 */
     .chartBox {
-      position: absolute;
-      inset: 16px;
-    }
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  right: 320px;   /* 讓出右側給小卡（280px + 邊距） */
+  bottom: 260px;  /* 讓出下方給小卡（高度+邊距） */
+}
 
     canvas {
       width: 100% !important;
