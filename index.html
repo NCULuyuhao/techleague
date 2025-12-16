@@ -3,23 +3,49 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>多人同步花費成本看板</title>
+  <title>各小組花費成本</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <style>
     body { font-family: system-ui, -apple-system, "Noto Sans TC", sans-serif; margin: 24px; }
-    .wrap { max-width: 980px; margin: 0 auto; }
-    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-    .card { border: 1px solid #ddd; border-radius: 12px; padding: 16px; }
+    .wrap { max-width: 1100px; margin: 0 auto; }
+    h1 { margin: 0 0 10px; }
+    .small { color:#666; font-size: 13px; line-height: 1.4; margin: 0 0 14px; }
+
+    /* 上方：左小（操作）右大（圖表） */
+    .row-top { display: grid; grid-template-columns: 1fr 2.2fr; gap: 16px; align-items: stretch; }
+    .card { border: 1px solid #ddd; border-radius: 12px; padding: 16px; background: #fff; }
+
     label { display:block; font-size: 14px; margin: 10px 0 6px; }
     select, input { width: 100%; padding: 10px; border-radius: 10px; border: 1px solid #ccc; }
     input[disabled] { background:#f6f6f6; }
+
     button { padding: 10px 12px; border-radius: 10px; border: 1px solid #ccc; cursor: pointer; }
     button.primary { border-color: #111; }
     button.danger { border-color: #c00; }
     .btns { display:flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
-    .small { color:#666; font-size: 13px; line-height: 1.4; }
+
+    /* 圖表放大：固定高度容器 + Chart.js 取消等比鎖定 */
+    .chartCard { padding: 16px; }
+    .chartBox { height: 460px; } /* 你要更大可改 520px */
+    canvas { width: 100% !important; height: 100% !important; }
+
+    /* 底部表格縮小 */
+    .miniCard {
+      margin-top: 14px;
+      max-width: 520px;  /* 縮小卡片寬度 */
+      padding: 12px;
+    }
+    .miniCard h3 { margin: 0 0 10px; font-size: 15px; }
     table { width:100%; border-collapse: collapse; }
-    th, td { text-align:left; padding: 8px; border-bottom: 1px solid #eee; }
+    th, td { text-align:left; padding: 6px 8px; border-bottom: 1px solid #eee; font-size: 12px; }
+    th { color:#444; }
+    .tableScroll { max-height: 220px; overflow: auto; border: 1px solid #eee; border-radius: 10px; }
+
+    @media (max-width: 900px) {
+      .row-top { grid-template-columns: 1fr; }
+      .chartBox { height: 360px; }
+      .miniCard { max-width: 100%; }
+    }
   </style>
 </head>
 <body>
@@ -27,7 +53,7 @@
   <h1>多人同步花費成本看板</h1>
   <p class="small">小幫手只能操作自己對應的組別（防誤植）；花費成本最低為 0。</p>
 
-  <div class="row">
+  <div class="row-top">
     <div class="card">
       <label>小幫手</label>
       <select id="helper">
@@ -51,25 +77,27 @@
         <button class="danger" id="subBtn">減少成本</button>
       </div>
 
-      <p class="small" id="status"></p>
+      <p class="small" id="status" style="margin-top:10px;"></p>
     </div>
 
-    <div class="card">
-      <canvas id="chart"></canvas>
+    <div class="card chartCard">
+      <div class="chartBox">
+        <canvas id="chart"></canvas>
+      </div>
     </div>
   </div>
 
-  <div class="card" style="margin-top:16px;">
+  <div class="card miniCard">
     <h3>目前花費成本</h3>
-    <table id="scoreTable"></table>
+    <div class="tableScroll">
+      <table id="scoreTable"></table>
+    </div>
   </div>
 </div>
 
 <script type="module">
-  // 7 組（第 n 組對應小幫手 n）
   const GROUPS = ["第1組","第2組","第3組","第4組","第5組","第6組","第7組"];
 
-  // Firebase
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
   import {
     getFirestore, doc, onSnapshot, runTransaction, serverTimestamp, setDoc, getDoc
@@ -88,11 +116,11 @@
   const db = getFirestore(app);
   const ref = doc(db, "scoreboard", "main");
 
-  // 只在第一次建立資料（避免 F5 覆蓋）
+  // 第一次才建立資料（避免 F5 覆蓋）
   const init = await getDoc(ref);
   if (!init.exists()) {
     await setDoc(ref, {
-      costs: Array(GROUPS.length).fill(0), // 改成 costs 欄位（語意清楚）
+      costs: Array(GROUPS.length).fill(0),
       updatedAt: serverTimestamp()
     });
   }
@@ -101,25 +129,22 @@
   const groupDisplay = document.getElementById("groupDisplay");
   const statusEl = document.getElementById("status");
 
-  function helperIndex() {
-    return helperSel.selectedIndex; // 0~6
-  }
-
-  function syncGroup() {
-    groupDisplay.value = GROUPS[helperIndex()] || "";
-  }
-
+  function helperIndex() { return helperSel.selectedIndex; }
+  function syncGroup() { groupDisplay.value = GROUPS[helperIndex()] || ""; }
   helperSel.addEventListener("change", syncGroup);
   syncGroup();
 
-  // Chart
   const chart = new Chart(document.getElementById("chart"), {
     type: "bar",
     data: { labels: GROUPS, datasets: [{ label:"花費成本", data: Array(GROUPS.length).fill(0) }] },
-    options: { animation:false, scales:{ y:{ beginAtZero:true } } }
+    options: {
+      responsive: true,
+      maintainAspectRatio: false, // 讓它吃滿 .chartBox 高度（放大關鍵）
+      animation: false,
+      scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+    }
   });
 
-  // 即時同步 UI
   onSnapshot(ref, snap => {
     const data = snap.data() || {};
     const costs = Array.isArray(data.costs) ? data.costs : Array(GROUPS.length).fill(0);
@@ -132,14 +157,10 @@
       GROUPS.map((g,i)=>`<tr><td>${g}</td><td>${costs[i] ?? 0}</td></tr>`).join("");
   });
 
-  function setStatus(msg) {
-    statusEl.textContent = msg;
-  }
+  function setStatus(msg) { statusEl.textContent = msg; }
 
   async function apply(sign) {
-    const raw = document.getElementById("delta").value;
-    const delta = parseInt(raw, 10);
-
+    const delta = parseInt(document.getElementById("delta").value, 10);
     if (!Number.isFinite(delta) || delta <= 0) {
       setStatus("花費成本請輸入大於 0 的整數。");
       return;
@@ -152,10 +173,10 @@
       const data = snap.data() || {};
       const costs = Array.isArray(data.costs) ? data.costs.slice() : Array(GROUPS.length).fill(0);
 
-      // ✅ 下限鎖定 0：怎麼減都不會負數
+      // 下限 0（怎麼減都不會負）
       costs[group] = Math.max(0, (costs[group] ?? 0) + sign * Math.abs(delta));
 
-      tx.set(ref, { costs, updatedAt: serverTimestamp() }, { merge:true });
+      tx.set(ref, { costs, updatedAt: serverTimestamp() }, { merge: true });
     });
 
     setStatus(`${GROUPS[group]} ${sign > 0 ? "增加" : "減少"} 花費成本 ${Math.abs(delta)}`);
