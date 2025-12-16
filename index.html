@@ -1,11 +1,103 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>多人同步記分板</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <style>
+    body { font-family: system-ui, -apple-system, "Noto Sans TC", sans-serif; margin: 24px; }
+    .wrap { max-width: 980px; margin: 0 auto; }
+    h1 { margin: 0 0 12px; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .card { border: 1px solid #ddd; border-radius: 12px; padding: 16px; }
+    label { display:block; font-size: 14px; margin: 10px 0 6px; }
+    select, input { width: 100%; padding: 10px; border-radius: 10px; border: 1px solid #ccc; }
+    button { padding: 10px 12px; border-radius: 10px; border: 1px solid #ccc; cursor: pointer; }
+    button.primary { border-color: #111; }
+    button.danger { border-color: #c00; }
+    .btns { display:flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+    .small { color:#666; font-size: 13px; line-height: 1.4; }
+    table { width:100%; border-collapse: collapse; }
+    th, td { text-align:left; padding: 8px; border-bottom: 1px solid #eee; font-size: 14px; }
+    .pill { display:inline-block; padding: 2px 8px; border: 1px solid #ddd; border-radius: 999px; font-size: 12px; }
+    .log { max-height: 260px; overflow:auto; }
+    @media (max-width: 860px) { .row { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <h1>多人同步記分板</h1>
+  <p class="small">
+    ✅ 多人即時同步（A 加分，B 立刻看到）。<br>
+    ✅ 小幫手用可寫入連結：<span class="pill" id="writeLink"></span><br>
+    ✅ 觀眾用唯讀連結：<span class="pill" id="readLink"></span>
+  </p>
+
+  <div class="row">
+    <div class="card">
+      <h2 style="margin:0 0 8px;">輸入分數</h2>
+
+      <label>小幫手</label>
+      <select id="helper">
+        <option>小幫手1</option><option>小幫手2</option><option>小幫手3</option>
+        <option>小幫手4</option><option>小幫手5</option><option>小幫手6</option><option>小幫手7</option>
+      </select>
+
+      <label>組別（共7組）</label>
+      <select id="group"></select>
+
+      <label>分數（一次加/扣多少）</label>
+      <input id="delta" type="number" value="1" step="1" />
+
+      <div class="btns">
+        <button class="primary" id="addBtn">加分</button>
+        <button class="danger" id="subBtn">減分</button>
+        <button id="undoBtn">撤銷最後一筆</button>
+        <button id="resetBtn">重置全部分數</button>
+      </div>
+
+      <p class="small" id="mode"></p>
+      <p class="small" id="status"></p>
+    </div>
+
+    <div class="card">
+      <h2 style="margin:0 0 8px;">視覺化</h2>
+      <canvas id="chart" height="160"></canvas>
+      <div style="margin-top:12px;">
+        <span class="pill">總分：<b id="totalScore">0</b></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="row" style="margin-top:16px;">
+    <div class="card">
+      <h2 style="margin:0 0 8px;">目前分數</h2>
+      <table id="scoreTable"></table>
+    </div>
+
+    <div class="card">
+      <h2 style="margin:0 0 8px;">操作紀錄</h2>
+      <div class="log">
+        <table id="logTable"></table>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script type="module">
-  // Firebase (CDN)
+  // ====== 你可以改這個：寫入密碼（小幫手用） ======
+  const WRITE_TOKEN = "abc123";
+
+  // ====== 組別 ======
+  const GROUPS = ["第1組","第2組","第3組","第4組","第5組","第6組","第7組"];
+
+  // ====== Firebase ======
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
   import {
     getFirestore, doc, onSnapshot, runTransaction, serverTimestamp, setDoc
   } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
 
-  // 你的 Firebase config（照你貼的）
   const firebaseConfig = {
     apiKey: "AIzaSyDaVs55ij_E9B8WfAYkd4u1EjriQjnbs0k",
     authDomain: "techleague-e39af.firebaseapp.com",
@@ -18,25 +110,22 @@
 
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
-
-  // ====== 你的組別 ======
-  const GROUPS = ["第1組","第2組","第3組","第4組","第5組","第6組","第7組"];
-
-  // ====== 共享文件位置：scoreboard/main ======
   const ref = doc(db, "scoreboard", "main");
 
-  // ====== 簡易寫入權限：網址帶 token 才能改分（你也可以改成不要 token） ======
+  // ====== 權限（網址 token） ======
   const url = new URL(location.href);
   const token = url.searchParams.get("token") || "";
-  const canWrite = token.length > 0;
+  const canWrite = token === WRITE_TOKEN;
 
-  // 下面這些元素 id 要和我之前給你的版本一致：
-  // helper, group, delta, addBtn, subBtn, undoBtn, resetBtn, status
-  // 以及你的 render/chart 部分（若你用我之前那份整頁 index.html，完全吻合）
+  // 顯示分享連結
+  const baseUrl = location.origin + location.pathname;
+  document.getElementById("writeLink").textContent = `${baseUrl}?token=${WRITE_TOKEN}`;
+  document.getElementById("readLink").textContent = baseUrl;
+  document.getElementById("mode").textContent =
+    canWrite ? "模式：可寫入（小幫手）" : "模式：唯讀（觀眾）— 需要 ?token=密碼 才能改分";
 
   // 初始化 group 下拉
   const groupSel = document.getElementById("group");
-  groupSel.innerHTML = "";
   GROUPS.forEach((g, i) => {
     const opt = document.createElement("option");
     opt.value = i;
@@ -44,34 +133,61 @@
     groupSel.appendChild(opt);
   });
 
-  function setStatus(msg) {
-    const el = document.getElementById("status");
-    if (el) el.textContent = msg;
-  }
+  // Chart
+  const chart = new Chart(document.getElementById("chart"), {
+    type: "bar",
+    data: { labels: GROUPS, datasets: [{ label: "分數", data: Array(GROUPS.length).fill(0) }] },
+    options: { responsive: true, animation: false, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
+  });
 
-  // 確保文件存在（第一次）
+  function setStatus(msg) { document.getElementById("status").textContent = msg; }
+  function escapeHtml(s) { return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+
+  // 確保文件存在
   await setDoc(ref, {
     scores: Array(GROUPS.length).fill(0),
     log: [],
     updatedAt: serverTimestamp()
   }, { merge: true });
 
-  // 即時訂閱（任何人改分，所有人同步）
+  // 任何人更新 -> 所有人 UI 更新
   onSnapshot(ref, (snap) => {
     const data = snap.data();
     if (!data) return;
-    // ⚠️ 你需要有一個 render(scores, log) 來更新表格/圖表
-    // 如果你是用我之前給你的整頁版本，它本來就有 render()
     render(data.scores || Array(GROUPS.length).fill(0), data.log || []);
   });
 
+  function render(scores, log) {
+    chart.data.datasets[0].data = scores.slice();
+    chart.update();
+
+    document.getElementById("totalScore").textContent = scores.reduce((a,b)=>a+b,0);
+
+    document.getElementById("scoreTable").innerHTML = `
+      <tr><th>組別</th><th>分數</th></tr>
+      ${GROUPS.map((g,i)=>`<tr><td>${g}</td><td><b>${scores[i] ?? 0}</b></td></tr>`).join("")}
+    `;
+
+    document.getElementById("logTable").innerHTML = `
+      <tr><th>時間</th><th>小幫手</th><th>組別</th><th>動作</th><th>分數</th></tr>
+      ${log.slice().reverse().map(x=>`
+        <tr>
+          <td>${x.ts ? new Date(x.ts).toLocaleString() : ""}</td>
+          <td>${escapeHtml(x.helper || "")}</td>
+          <td>${GROUPS[x.group] ?? ""}</td>
+          <td>${(x.delta ?? 0) > 0 ? "加分" : "減分"}</td>
+          <td>${x.delta ?? 0}</td>
+        </tr>
+      `).join("")}
+    `;
+  }
+
   async function apply(sign) {
-    if (!canWrite) { setStatus("你目前是僅可觀看。請用含 ?token=密碼 的連結進入才可改分。"); return; }
+    if (!canWrite) { setStatus("你是唯讀模式，請用含 token 的連結進入才可改分。"); return; }
 
     const helper = document.getElementById("helper").value;
     const group = parseInt(document.getElementById("group").value, 10);
     const deltaInput = parseInt(document.getElementById("delta").value, 10);
-
     if (!Number.isFinite(deltaInput) || deltaInput === 0) { setStatus("分數請輸入非 0 的整數。"); return; }
 
     const delta = sign * Math.abs(deltaInput);
@@ -95,7 +211,7 @@
   document.getElementById("subBtn").addEventListener("click", () => apply(-1));
 
   document.getElementById("undoBtn").addEventListener("click", async () => {
-    if (!canWrite) { setStatus("僅可觀看，無法撤銷。"); return; }
+    if (!canWrite) { setStatus("唯讀模式，無法撤銷。"); return; }
 
     await runTransaction(db, async (tx) => {
       const snap = await tx.get(ref);
@@ -114,18 +230,15 @@
   });
 
   document.getElementById("resetBtn").addEventListener("click", async () => {
-    if (!canWrite) { setStatus("僅可觀看，無法重置。"); return; }
+    if (!canWrite) { setStatus("唯讀模式，無法重置。"); return; }
     if (!confirm("確定要重置全部分數與紀錄嗎？")) return;
 
     await runTransaction(db, async (tx) => {
-      tx.set(ref, {
-        scores: Array(GROUPS.length).fill(0),
-        log: [],
-        updatedAt: serverTimestamp()
-      }, { merge: true });
+      tx.set(ref, { scores: Array(GROUPS.length).fill(0), log: [], updatedAt: serverTimestamp() }, { merge: true });
     });
 
     setStatus("已重置。");
   });
-
 </script>
+</body>
+</html>
