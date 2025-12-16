@@ -83,13 +83,21 @@
 
     /* 下方操作區 */
     .controls{
-      padding: 16px;
-      background: #fff;
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap: 12px;
-      align-items: end;
-    }
+  padding: 16px;
+  background: #fff;
+  display: grid;
+
+  /* 固定 5 欄：3 個輸入 + 2 個按鈕 */
+  grid-template-columns: 220px 220px 220px 160px 160px;
+
+  gap: 12px;
+  align-items: end;
+  justify-content: start; /* 不要把欄位拉滿整排 */
+}
+.controls button{
+  width: 100%;
+}
+    
     label{ font-size: 13px; display:block; margin-bottom: 4px; color:#333; }
     select, input{
       width: 100%;
@@ -120,6 +128,8 @@
       .stage{
         grid-template-columns: 1fr;
         min-height: auto;
+      .controls{
+       grid-template-columns: 1fr;
       }
       .chartBox{
         min-height: 360px;
